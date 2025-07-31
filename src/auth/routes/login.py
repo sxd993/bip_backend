@@ -107,5 +107,14 @@ async def login(data: LoginData):
 async def logout():
     """Выход из системы"""
     response = JSONResponse(content={"message": "Выход выполнен успешно"})
-    response.delete_cookie(key="access_token")
+    
+    # Удаляем cookie с теми же параметрами, что и при создании
+    response.delete_cookie(
+        key="access_token",
+        httponly=True,
+        secure=True if os.getenv("ENV") == "production" else False,
+        samesite="none" if os.getenv("ENV") == "production" else "lax",
+        path="/",
+    )
+    
     return response
