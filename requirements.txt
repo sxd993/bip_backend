@@ -1,0 +1,9 @@
+fastapi
+mysql-connector-python
+uvicorn
+bcrypt
+pyjwt
+python-dotenv
+requests
+python-dateutil
+pydantic[email]
