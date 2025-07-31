@@ -6,7 +6,7 @@ import mysql.connector
 router = APIRouter()
 
 
-@router.post("/create")
+@router.post("/departaments/create")
 async def create_department(name: str, token: str = Depends(get_token)):
     """Создать новый департамент внутри компании (только для руководителей)"""
     try:
@@ -53,7 +53,7 @@ async def create_department(name: str, token: str = Depends(get_token)):
         raise HTTPException(status_code=500, detail=f"Непредвиденная ошибка: {str(e)}")
 
 
-@router.get("/get")
+@router.get("/departaments/get")
 async def get_departments(token: str = Depends(get_token)):
     """Получить список департаментов компании по company_id из токена"""
     try:

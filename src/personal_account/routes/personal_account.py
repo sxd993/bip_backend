@@ -6,7 +6,7 @@
 """
 
 from fastapi import APIRouter
-from .departament import router as departament_router
+from .departaments import router as departament_router
 from .employees import router as employees_router
 
 router = APIRouter()
