@@ -17,6 +17,7 @@ from ..utils.auth_utils import (
     create_bitrix_contact,
     create_bitrix_company,
     create_bitrix_requisite,
+    find_bitrix_contact,
 )
 
 router = APIRouter()
@@ -42,22 +43,25 @@ async def register_physical_person(data: RegisterPhysicalPersonData):
                 detail="Пользователь с таким телефоном или email уже существует",
             )
 
-        # Создаем контакт в Bitrix24
-        contact_data = {
-            "NAME": data.first_name,
-            "SECOND_NAME": data.second_name,
-            "LAST_NAME": data.last_name,
-            "BIRTHDATE": data.birthdate,
-            "PHONE": [{"VALUE": data.phone, "VALUE_TYPE": "WORK"}],
-            "EMAIL": [{"VALUE": data.email, "VALUE_TYPE": "WORK"}],
-        }
-        contact_id = create_bitrix_contact(contact_data)
+        # Синхронизация с Bitrix24
+        contact_id = find_bitrix_contact(data.email, data.phone)
+        if not contact_id:
+            # Если контакта нет — создаём
+            contact_data = {
+                "NAME": data.first_name,
+                "SECOND_NAME": data.second_name,
+                "LAST_NAME": data.last_name,
+                "BIRTHDATE": data.birthdate,
+                "PHONE": [{"VALUE": data.phone, "VALUE_TYPE": "WORK"}],
+                "EMAIL": [{"VALUE": data.email, "VALUE_TYPE": "WORK"}],
+            }
+            contact_id = create_bitrix_contact(contact_data)
 
         if not contact_id:
             cursor.close()
             conn.close()
             raise HTTPException(
-                status_code=500, detail="Ошибка создания контакта в Bitrix24"
+                status_code=500, detail="Ошибка создания или поиска контакта в Bitrix24"
             )
 
         # Хешируем пароль
