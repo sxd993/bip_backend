@@ -39,6 +39,11 @@ class RegisterPhysicalPersonData(BaseModel):
         except ValueError:
             raise ValueError("Некорректный формат даты рождения")
 
+    @validator("phone")
+    def validate_phone(cls, v):
+        digits_only = re.sub(r"\D", "", v)
+        return '+' + digits_only
+
 class RegisterLegalEntityData(BaseModel):
     """Регистрация юридического лица"""
     company_name: str
