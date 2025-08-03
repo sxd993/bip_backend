@@ -25,17 +25,17 @@ async def login(data: LoginData):
         conn = connect_to_db()
         cursor = conn.cursor(dictionary=True)
 
-        # Ищем пользователя по логину или телефону
+        # Ищем пользователя по почте или телефону
         cursor.execute(
-            "SELECT * FROM users WHERE login = %s OR phone = %s",
-            (data.login, data.login),
+            "SELECT * FROM users WHERE email = %s OR phone = %s",
+            (data.email_or_phone, data.email_or_phone),
         )
         user = cursor.fetchone()
 
         if not user:
             cursor.close()
             conn.close()
-            raise HTTPException(status_code=401, detail="Неверный логин или пароль")
+            raise HTTPException(status_code=401, detail="Неверный номер телефона/почта или пароль")
 
         # Проверяем пароль
         if not verify_password(data.password, user["password"]):
@@ -53,7 +53,7 @@ async def login(data: LoginData):
 
         # Создаем токен
         token_data = { 
-            "sub": user["login"],
+            "sub": user["email"],
             "user_id": user["id"],
             "user_type": user["user_type"],
             "role": user["role"],

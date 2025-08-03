@@ -17,12 +17,11 @@ import re
 from dateutil.parser import parse
 
 class LoginData(BaseModel):
-    login: str
+    email_or_phone: str
     password: str
 
 class RegisterPhysicalPersonData(BaseModel):
     """Регистрация физического лица"""
-    login: str
     first_name: str
     second_name: str
     last_name: str

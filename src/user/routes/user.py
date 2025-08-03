@@ -23,7 +23,7 @@ async def get_user(token: str = Depends(get_token)):
 
         # Получаем актуальные данные пользователя из БД
         cursor.execute(
-            "SELECT id, login, user_type, role, first_name, second_name, last_name, "
+            "SELECT id, user_type, role, first_name, second_name, last_name, "
             "phone, email, contact_id, company_id, department_id, balance, created_at "
             "FROM users WHERE id = %s",
             (user_id,),
@@ -47,7 +47,6 @@ async def get_user(token: str = Depends(get_token)):
         # Формируем базовый ответ
         response_data = {
             "id": user["id"],
-            "login": user["login"],
             "user_type": user["user_type"],
             "role": user["role"],
             "first_name": user["first_name"],

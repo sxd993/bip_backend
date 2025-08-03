@@ -70,11 +70,10 @@ async def register_physical_person(data: RegisterPhysicalPersonData):
         # Создаем пользователя в БД
         cursor.execute(
             """INSERT INTO users (
-                login, password, user_type, role, first_name, second_name, 
+                password, user_type, role, first_name, second_name, 
                 last_name, birthdate, phone, email, contact_id, balance
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
             (
-                data.login,
                 hashed_password,
                 "physical",
                 "Пользователь",
@@ -96,7 +95,6 @@ async def register_physical_person(data: RegisterPhysicalPersonData):
 
         # Создаем access_token
         token_data = {
-            "sub": user["login"],
             "user_id": user["id"],
             "user_type": user["user_type"],
             "role": user["role"],
@@ -266,7 +264,6 @@ async def register_legal_entity(data: RegisterLegalEntityData):
         user = cursor.fetchone()
 
         token_data = {
-            "sub": user["login"],
             "user_id": user["id"],
             "user_type": user["user_type"],
             "role": user["role"],
