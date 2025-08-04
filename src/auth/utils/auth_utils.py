@@ -55,72 +55,44 @@ def normalize_phone(phone: str) -> str:
     """Оставляет только цифры из номера телефона"""
     return re.sub(r"\D", "", phone)
 
+def format_phone_with_plus(phone: str) -> str:
+    """Форматирует номер телефона с добавлением '+'"""
+    normalized = normalize_phone(phone)
+    return f"+{normalized}"
+
 def find_bitrix_contact(email: str, phone: str) -> str | None:
-    """
-    Проверяет существование контакта в Bitrix24 по email и телефону
-    """
-    # Учитываем, что телефон в БД может быть с "+"
-    phone_normalized = normalize_phone(phone)
-    url = f"https://{BITRIX_DOMAIN}/rest/1/{BITRIX_TOKEN}/crm.contact.list.json?filter[PHONE]={phone_normalized}&filter[EMAIL]={email}&select[]=ID&select[]=PHONE&select[]=EMAIL"
-    
+    """Проверяет существование контакта в Bitrix24 по email и телефону"""
+    phone_with_plus = format_phone_with_plus(phone)
+    url = f"https://{BITRIX_DOMAIN}/rest/1/{BITRIX_TOKEN}/crm.contact.list.json"
+    params = {
+        "filter[PHONE]": phone_with_plus,
+        "filter[EMAIL]": email,
+        "select[]": ["ID", "PHONE", "EMAIL"]
+    }
+
     try:
-        response = requests.get(url)
+        response = requests.get(url, params=params)
+        response.raise_for_status()
         contacts = response.json().get("result", [])
-        
+
         if not contacts:
             return None
-        
-        # Проверяем первый контакт
-        contact = contacts[0]
-        emails = contact.get("EMAIL", [])
-        phones = contact.get("PHONE", [])
-        
-        # Проверяем email
-        email_match = any(e.get("VALUE", "").lower() == email.lower() for e in emails)
-        if not email_match:
-            return None
-        
-        # Проверяем телефон
-        phone_match = any(normalize_phone(p.get("VALUE", "")) == phone_normalized for p in phones)
-        if not phone_match:
-            return None
-        
-        return contact["ID"]
-        
-    except Exception as e:
-        print(f"Ошибка: {e}")
-        return None
-    """
-    Проверяет, соответствует ли контакт с данным ID переданным email и phone
-    """
-    
-    url = f"https://{BITRIX_DOMAIN}/rest/1/{BITRIX_TOKEN}/crm.contact.get"
-    params = {"id": id}
-    
-    try:
-        response = requests.post(url, json=params)
-        contact = response.json().get("result")
-        
-        if not contact:
-            return None
-        
-        # Проверяем email
-        if email:
+
+        for contact in contacts:
+            contact_id = contact.get("ID")
             emails = contact.get("EMAIL", [])
-            email_match = any(e.get("VALUE", "").lower() == email.lower() for e in emails)
-            if not email_match:
-                return None
-        
-        # Проверяем телефон
-        if phone:
             phones = contact.get("PHONE", [])
-            phone_normalized = normalize_phone(phone)
-            phone_match = any(normalize_phone(p.get("VALUE", "")) == phone_normalized for p in phones)
-            if not phone_match:
-                return None
-        
-        return contact["ID"]
-        
-    except Exception as e:
-        print(f"Ошибка: {e}")
+
+            email_match = any(e.get("VALUE", "").lower() == email.lower() for e in emails)
+            phone_match = any(p.get("VALUE", "") == phone_with_plus for p in phones)
+
+            if email_match and phone_match:
+                return contact_id
+
+            elif email_match or phone_match:
+                return contact_id
+
+        return None
+
+    except requests.RequestException as e:
         return None
