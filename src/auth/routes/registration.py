@@ -18,6 +18,7 @@ from ..utils.auth_utils import (
     create_bitrix_company,
     create_bitrix_requisite,
     find_bitrix_contact,
+    normalize_phone,
 )
 
 router = APIRouter()
@@ -43,12 +44,13 @@ async def register_physical_person(data: RegisterPhysicalPersonData):
             )
 
         # Проверка контакта в Bitrix24
-        contact_id = find_bitrix_contact(data.email, data.phone, None)
+        phone_normalized = normalize_phone(data.phone)  # Убираем "+" для Bitrix24
+        contact_id = find_bitrix_contact(data.email, phone_normalized)
 
         # Хешируем пароль
         hashed_password = hash_password(data.password)
 
-        # Создаем пользователя в БД
+        # Создаем пользователя в БД (телефон сохраняем с "+")
         cursor.execute(
             """INSERT INTO users (
                 password, user_type, role, first_name, second_name, 
@@ -77,7 +79,7 @@ async def register_physical_person(data: RegisterPhysicalPersonData):
                 "SECOND_NAME": data.second_name,
                 "LAST_NAME": data.last_name,
                 "BIRTHDATE": data.birthdate,
-                "PHONE": [{"VALUE": data.phone, "VALUE_TYPE": "WORK"}],
+                "PHONE": [{"VALUE": phone_normalized, "VALUE_TYPE": "WORK"}],
                 "EMAIL": [{"VALUE": data.email, "VALUE_TYPE": "WORK"}],
             }
             contact_id = create_bitrix_contact(contact_data)
@@ -173,12 +175,13 @@ async def register_legal_entity(data: RegisterLegalEntityData):
             )
 
         # Проверка контакта в Bitrix24
-        contact_id = find_bitrix_contact(data.email, data.phone, None)
+        phone_normalized = normalize_phone(data.phone)  # Убираем "+" для Bitrix24
+        contact_id = find_bitrix_contact(data.email, phone_normalized)
 
         # Хешируем пароль
         hashed_password = hash_password(data.password)
 
-        # Создаем пользователя в БД
+        # Создаем пользователя в БД (телефон сохраняем с "+")
         cursor.execute(
             """INSERT INTO users (
                 login, password, user_type, role, first_name, second_name, 
@@ -221,7 +224,7 @@ async def register_legal_entity(data: RegisterLegalEntityData):
         # Создаем компанию в Bitrix24
         company_data = {
             "TITLE": data.company_name,
-            "PHONE": [{"VALUE": data.phone, "VALUE_TYPE": "WORK"}],
+            "PHONE": [{"VALUE": phone_normalized, "VALUE_TYPE": "WORK"}],
             "EMAIL": [{"VALUE": data.email, "VALUE_TYPE": "WORK"}],
         }
         company_id = create_bitrix_company(company_data)
@@ -255,7 +258,7 @@ async def register_legal_entity(data: RegisterLegalEntityData):
                 "NAME": data.employee_first_name,
                 "SECOND_NAME": data.employee_second_name,
                 "LAST_NAME": data.employee_last_name,
-                "PHONE": [{"VALUE": data.phone, "VALUE_TYPE": "WORK"}],
+                "PHONE": [{"VALUE": phone_normalized, "VALUE_TYPE": "WORK"}],
                 "EMAIL": [{"VALUE": data.email, "VALUE_TYPE": "WORK"}],
                 "COMPANY_ID": company_id,
             }

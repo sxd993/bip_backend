@@ -55,7 +55,41 @@ def normalize_phone(phone: str) -> str:
     """Оставляет только цифры из номера телефона"""
     return re.sub(r"\D", "", phone)
 
-def find_bitrix_contact(email: str, phone: str, id: str, BITRIX_DOMAIN: str, BITRIX_TOKEN: str):
+def find_bitrix_contact(email: str, phone: str) -> str | None:
+    """
+    Проверяет существование контакта в Bitrix24 по email и телефону
+    """
+    # Учитываем, что телефон в БД может быть с "+"
+    phone_normalized = normalize_phone(phone)
+    url = f"https://{BITRIX_DOMAIN}/rest/1/{BITRIX_TOKEN}/crm.contact.list.json?filter[PHONE]={phone_normalized}&filter[EMAIL]={email}&select[]=ID&select[]=PHONE&select[]=EMAIL"
+    
+    try:
+        response = requests.get(url)
+        contacts = response.json().get("result", [])
+        
+        if not contacts:
+            return None
+        
+        # Проверяем первый контакт
+        contact = contacts[0]
+        emails = contact.get("EMAIL", [])
+        phones = contact.get("PHONE", [])
+        
+        # Проверяем email
+        email_match = any(e.get("VALUE", "").lower() == email.lower() for e in emails)
+        if not email_match:
+            return None
+        
+        # Проверяем телефон
+        phone_match = any(normalize_phone(p.get("VALUE", "")) == phone_normalized for p in phones)
+        if not phone_match:
+            return None
+        
+        return contact["ID"]
+        
+    except Exception as e:
+        print(f"Ошибка: {e}")
+        return None
     """
     Проверяет, соответствует ли контакт с данным ID переданным email и phone
     """
