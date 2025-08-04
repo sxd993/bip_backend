@@ -22,7 +22,6 @@ from ..utils.auth_utils import (
 
 router = APIRouter()
 
-
 @router.post("/register/physical")
 async def register_physical_person(data: RegisterPhysicalPersonData):
     """Регистрация физического лица"""
@@ -30,7 +29,7 @@ async def register_physical_person(data: RegisterPhysicalPersonData):
         conn = connect_to_db()
         cursor = conn.cursor(dictionary=True)
 
-        # Проверяем, не существует ли уже пользователь
+        # Проверка существования пользователя
         cursor.execute(
             "SELECT * FROM users WHERE phone = %s OR email = %s",
             (data.phone, data.email),
@@ -43,26 +42,8 @@ async def register_physical_person(data: RegisterPhysicalPersonData):
                 detail="Пользователь с таким телефоном или email уже существует",
             )
 
-        # Синхронизация с Bitrix24
-        contact_id = find_bitrix_contact(data.email, data.phone)
-        if not contact_id:
-            # Если контакта нет — создаём
-            contact_data = {
-                "NAME": data.first_name,
-                "SECOND_NAME": data.second_name,
-                "LAST_NAME": data.last_name,
-                "BIRTHDATE": data.birthdate,
-                "PHONE": [{"VALUE": data.phone, "VALUE_TYPE": "WORK"}],
-                "EMAIL": [{"VALUE": data.email, "VALUE_TYPE": "WORK"}],
-            }
-            contact_id = create_bitrix_contact(contact_data)
-
-        if not contact_id:
-            cursor.close()
-            conn.close()
-            raise HTTPException(
-                status_code=500, detail="Ошибка создания или поиска контакта в Bitrix24"
-            )
+        # Проверка контакта в Bitrix24
+        contact_id = find_bitrix_contact(data.email, data.phone, None)
 
         # Хешируем пароль
         hashed_password = hash_password(data.password)
@@ -83,13 +64,40 @@ async def register_physical_person(data: RegisterPhysicalPersonData):
                 data.birthdate,
                 data.phone,
                 data.email,
-                contact_id,
+                contact_id,  # Может быть None
                 0.0,
             ),
         )
+        user_id = cursor.lastrowid
+
+        # Если контакта нет, создаем в Bitrix24
+        if not contact_id:
+            contact_data = {
+                "NAME": data.first_name,
+                "SECOND_NAME": data.second_name,
+                "LAST_NAME": data.last_name,
+                "BIRTHDATE": data.birthdate,
+                "PHONE": [{"VALUE": data.phone, "VALUE_TYPE": "WORK"}],
+                "EMAIL": [{"VALUE": data.email, "VALUE_TYPE": "WORK"}],
+            }
+            contact_id = create_bitrix_contact(contact_data)
+            if not contact_id:
+                conn.rollback()
+                cursor.close()
+                conn.close()
+                raise HTTPException(
+                    status_code=500, detail="Ошибка создания контакта в Bitrix24"
+                )
+            
+            # Обновляем contact_id
+            cursor.execute(
+                "UPDATE users SET contact_id = %s WHERE id = %s",
+                (contact_id, user_id),
+            )
+
         conn.commit()
 
-        # Получаем только что созданного пользователя
+        # Получаем пользователя
         cursor.execute("SELECT * FROM users WHERE phone = %s", (data.phone,))
         user = cursor.fetchone()
 
@@ -131,10 +139,14 @@ async def register_physical_person(data: RegisterPhysicalPersonData):
 
     except mysql.connector.Error as e:
         conn.rollback()
+        cursor.close()
+        conn.close()
         raise HTTPException(status_code=500, detail=f"Ошибка базы данных: {str(e)}")
     except Exception as e:
+        conn.rollback()
+        cursor.close()
+        conn.close()
         raise HTTPException(status_code=500, detail=f"Непредвиденная ошибка: {str(e)}")
-
 
 @router.post("/register/legal")
 async def register_legal_entity(data: RegisterLegalEntityData):
@@ -143,64 +155,30 @@ async def register_legal_entity(data: RegisterLegalEntityData):
         conn = connect_to_db()
         cursor = conn.cursor(dictionary=True)
 
-        cursor.execute("SELECT * FROM companies WHERE inn = %s", (data.inn,))
+        # Проверка существования
+        cursor.execute(
+            """
+            SELECT u.id FROM users u WHERE u.phone = %s OR u.email = %s
+            UNION
+            SELECT c.id FROM companies c WHERE c.inn = %s
+            """,
+            (data.phone, data.email, data.inn)
+        )
         if cursor.fetchone():
             cursor.close()
             conn.close()
             raise HTTPException(
-                status_code=400, detail="Компания с таким ИНН уже зарегистрирована"
+                status_code=400,
+                detail="Пользователь или компания уже существуют"
             )
 
-        cursor.execute("SELECT * FROM users WHERE phone = %s", (data.phone,))
-        if cursor.fetchone():
-            cursor.close()
-            conn.close()
-            raise HTTPException(
-                status_code=400, detail="Пользователь с таким телефоном уже существует"
-            )
-
-        # Создаем компанию в Bitrix24
-        company_data = {
-            "TITLE": data.company_name,
-            "PHONE": [{"VALUE": data.phone, "VALUE_TYPE": "WORK"}],
-            "EMAIL": [{"VALUE": data.email, "VALUE_TYPE": "WORK"}],
-        }
-        company_id = create_bitrix_company(company_data)
-
-        if not company_id:
-            cursor.close()
-            conn.close()
-            raise HTTPException(
-                status_code=500, detail="Ошибка создания компании в Bitrix24"
-            )
-
-        # Создаем реквизиты компании с ИНН
-        requisite_id = create_bitrix_requisite(company_id, data.inn, data.company_name)
-
-        if not requisite_id:
-            print(f"Ошибка создания реквизитов для компании {company_id}")
-
-        contact_data = {
-            "NAME": data.employee_first_name,
-            "SECOND_NAME": data.employee_second_name,
-            "LAST_NAME": data.employee_last_name,
-            "PHONE": [{"VALUE": data.phone, "VALUE_TYPE": "WORK"}],
-            "EMAIL": [{"VALUE": data.email, "VALUE_TYPE": "WORK"}],
-            "COMPANY_ID": company_id,
-        }
-        contact_id = create_bitrix_contact(contact_data)
-
-        if not contact_id:
-            cursor.close()
-            conn.close()
-            raise HTTPException(
-                status_code=500, detail="Ошибка создания контакта в Bitrix24"
-            )
+        # Проверка контакта в Bitrix24
+        contact_id = find_bitrix_contact(data.email, data.phone, None)
 
         # Хешируем пароль
         hashed_password = hash_password(data.password)
 
-        # Создаем пользователя в БД (Руководитель)
+        # Создаем пользователя в БД
         cursor.execute(
             """INSERT INTO users (
                 login, password, user_type, role, first_name, second_name, 
@@ -216,14 +194,14 @@ async def register_legal_entity(data: RegisterLegalEntityData):
                 data.employee_last_name,
                 data.phone,
                 data.email,
-                contact_id,
-                None,  # company_id будет обновлен после создания компании
+                contact_id,  # Может быть None
+                None,
                 0.0,
             ),
         )
         user_id = cursor.lastrowid
 
-        # Создаем компанию в БД с creator_id
+        # Создаем компанию в БД
         cursor.execute(
             """INSERT INTO companies (
                 name, inn, phone, email, bitrix_company_id, balance, creator_id
@@ -233,12 +211,68 @@ async def register_legal_entity(data: RegisterLegalEntityData):
                 data.inn,
                 data.phone,
                 data.email,
-                company_id,
+                None,  # bitrix_company_id пока None
                 0.0,
                 user_id,
             ),
         )
         company_db_id = cursor.lastrowid
+
+        # Создаем компанию в Bitrix24
+        company_data = {
+            "TITLE": data.company_name,
+            "PHONE": [{"VALUE": data.phone, "VALUE_TYPE": "WORK"}],
+            "EMAIL": [{"VALUE": data.email, "VALUE_TYPE": "WORK"}],
+        }
+        company_id = create_bitrix_company(company_data)
+        if not company_id:
+            conn.rollback()
+            cursor.close()
+            conn.close()
+            raise HTTPException(
+                status_code=500, detail="Ошибка создания компании в Bitrix24"
+            )
+
+        # Обновляем bitrix_company_id
+        cursor.execute(
+            "UPDATE companies SET bitrix_company_id = %s WHERE id = %s",
+            (company_id, company_db_id),
+        )
+
+        # Создаем реквизиты в Bitrix24
+        requisite_id = create_bitrix_requisite(company_id, data.inn, data.company_name)
+        if not requisite_id:
+            conn.rollback()
+            cursor.close()
+            conn.close()
+            raise HTTPException(
+                status_code=500, detail="Ошибка создания реквизитов в Bitrix24"
+            )
+
+        # Если контакта нет, создаем в Bitrix24
+        if not contact_id:
+            contact_data = {
+                "NAME": data.employee_first_name,
+                "SECOND_NAME": data.employee_second_name,
+                "LAST_NAME": data.employee_last_name,
+                "PHONE": [{"VALUE": data.phone, "VALUE_TYPE": "WORK"}],
+                "EMAIL": [{"VALUE": data.email, "VALUE_TYPE": "WORK"}],
+                "COMPANY_ID": company_id,
+            }
+            contact_id = create_bitrix_contact(contact_data)
+            if not contact_id:
+                conn.rollback()
+                cursor.close()
+                conn.close()
+                raise HTTPException(
+                    status_code=500, detail="Ошибка создания контакта в Bitrix24"
+                )
+            
+            # Обновляем contact_id
+            cursor.execute(
+                "UPDATE users SET contact_id = %s WHERE id = %s",
+                (contact_id, user_id),
+            )
 
         # Обновляем company_id в записи пользователя
         cursor.execute(
@@ -260,9 +294,11 @@ async def register_legal_entity(data: RegisterLegalEntityData):
 
         conn.commit()
 
+        # Получаем пользователя
         cursor.execute("SELECT * FROM users WHERE phone = %s", (data.phone,))
         user = cursor.fetchone()
 
+        # Создаем access_token
         token_data = {
             "user_id": user["id"],
             "user_type": user["user_type"],
@@ -275,6 +311,7 @@ async def register_legal_entity(data: RegisterLegalEntityData):
             "department_id": user.get("department_id"),
         }
         access_token = create_access_token(token_data, ACCESS_TOKEN_EXPIRE_MINUTES)
+
         response_data = {
             "message": "Регистрация компании успешно завершена",
             "user_type": user["user_type"],
@@ -299,6 +336,11 @@ async def register_legal_entity(data: RegisterLegalEntityData):
 
     except mysql.connector.Error as e:
         conn.rollback()
+        cursor.close()
+        conn.close()
         raise HTTPException(status_code=500, detail=f"Ошибка базы данных: {str(e)}")
     except Exception as e:
+        conn.rollback()
+        cursor.close()
+        conn.close()
         raise HTTPException(status_code=500, detail=f"Непредвиденная ошибка: {str(e)}")
