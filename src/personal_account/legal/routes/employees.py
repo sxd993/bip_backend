@@ -11,7 +11,7 @@ from src.utils.jwt_handler import get_token, decode_access_token
 from src.auth.utils.password_handler import hash_password
 from database import connect_to_db
 import mysql.connector
-from models import AddEmployeeData
+from ..models import AddEmployeeData
 from src.auth.utils.auth_utils import create_bitrix_contact
 
 router = APIRouter()

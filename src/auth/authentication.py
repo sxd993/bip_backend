@@ -1,10 +1,22 @@
+"""
+Модуль auth.py
+==============
+
+Главный модуль аутентификации, объединяющий все подмодули.
+"""
+
 from fastapi import APIRouter, Depends, HTTPException
+from .routes.registration import router as registration_router
+from .routes.login import router as authentication_router
 from src.utils.jwt_handler import get_token, decode_access_token
 from database import connect_to_db
 import mysql.connector
 
 router = APIRouter()
 
+# Подключаем все подмодули
+router.include_router(registration_router, tags=["registration"])
+router.include_router(authentication_router, tags=["authentication"])
 
 @router.get("/get-info")
 async def get_user(token: str = Depends(get_token)):

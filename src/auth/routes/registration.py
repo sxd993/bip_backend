@@ -5,7 +5,7 @@ from ..utils.password_handler import hash_password
 from config import ACCESS_TOKEN_EXPIRE_MINUTES
 from database import connect_to_db
 import mysql.connector
-from models import RegisterPhysicalPersonData, RegisterLegalEntityData
+from ..models import RegisterPhysicalPersonData, RegisterLegalEntityData
 from ..utils.auth_utils import (
     create_bitrix_contact,
     create_bitrix_company,
@@ -15,6 +15,7 @@ from ..utils.auth_utils import (
 )
 
 router = APIRouter()
+
 
 @router.post("/register/physical")
 async def register_physical_person(data: RegisterPhysicalPersonData):
@@ -38,7 +39,7 @@ async def register_physical_person(data: RegisterPhysicalPersonData):
 
         # Форматируем телефон с "+"
         phone_with_plus = format_phone_with_plus(data.phone)
-        
+
         # Проверка контакта в Bitrix24
         contact_id = find_bitrix_contact(data.email, phone_with_plus)
 
@@ -85,7 +86,7 @@ async def register_physical_person(data: RegisterPhysicalPersonData):
                 raise HTTPException(
                     status_code=500, detail="Ошибка создания контакта в Bitrix24"
                 )
-            
+
             # Обновляем contact_id
             cursor.execute(
                 "UPDATE users SET contact_id = %s WHERE id = %s",
@@ -108,7 +109,6 @@ async def register_physical_person(data: RegisterPhysicalPersonData):
             "last_name": user["last_name"],
             "contact_id": user["contact_id"],
             "company_id": user.get("company_id"),
-            "department_id": user.get("department_id"),
         }
         access_token = create_access_token(token_data, ACCESS_TOKEN_EXPIRE_MINUTES)
 
@@ -145,6 +145,7 @@ async def register_physical_person(data: RegisterPhysicalPersonData):
         conn.close()
         raise HTTPException(status_code=500, detail=f"Непредвиденная ошибка: {str(e)}")
 
+
 @router.post("/register/legal")
 async def register_legal_entity(data: RegisterLegalEntityData):
     """Регистрация юридического лица"""
@@ -159,19 +160,18 @@ async def register_legal_entity(data: RegisterLegalEntityData):
             UNION
             SELECT c.id FROM companies c WHERE c.inn = %s
             """,
-            (data.phone, data.email, data.inn)
+            (data.phone, data.email, data.inn),
         )
         if cursor.fetchone():
             cursor.close()
             conn.close()
             raise HTTPException(
-                status_code=400,
-                detail="Пользователь или компания уже существуют"
+                status_code=400, detail="Пользователь или компания уже существуют"
             )
 
         # Форматируем телефон с "+"
         phone_with_plus = format_phone_with_plus(data.phone)
-        
+
         # Проверка контакта в Bitrix24
         contact_id = find_bitrix_contact(data.email, phone_with_plus)
 
@@ -181,11 +181,10 @@ async def register_legal_entity(data: RegisterLegalEntityData):
         # Создаем пользователя в БД (телефон сохраняем с "+")
         cursor.execute(
             """INSERT INTO users (
-                login, password, user_type, role, first_name, second_name, 
+                password, user_type, role, first_name, second_name, 
                 last_name, phone, email, contact_id, company_id, balance
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
             (
-                data.email,
                 hashed_password,
                 "legal",
                 "Руководитель",
@@ -267,7 +266,7 @@ async def register_legal_entity(data: RegisterLegalEntityData):
                 raise HTTPException(
                     status_code=500, detail="Ошибка создания контакта в Bitrix24"
                 )
-            
+
             # Обновляем contact_id
             cursor.execute(
                 "UPDATE users SET contact_id = %s WHERE id = %s",
@@ -278,18 +277,6 @@ async def register_legal_entity(data: RegisterLegalEntityData):
         cursor.execute(
             "UPDATE users SET company_id = %s WHERE id = %s",
             (company_db_id, user_id),
-        )
-
-        # Создаем начальный отдел
-        cursor.execute(
-            """INSERT INTO departments (
-                company_id, name, balance
-            ) VALUES (%s, %s, %s)""",
-            (
-                company_db_id,
-                "Основной отдел",
-                0.0,
-            ),
         )
 
         conn.commit()
@@ -308,7 +295,6 @@ async def register_legal_entity(data: RegisterLegalEntityData):
             "last_name": user["last_name"],
             "contact_id": user["contact_id"],
             "company_id": user.get("company_id"),
-            "department_id": user.get("department_id"),
         }
         access_token = create_access_token(token_data, ACCESS_TOKEN_EXPIRE_MINUTES)
 

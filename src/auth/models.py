@@ -70,20 +70,3 @@ class RegisterLegalEntityData(BaseModel):
         elif digits_only.startswith("8"):
             return "7" + digits_only[1:]
         return digits_only
-
-class AddEmployeeData(BaseModel):
-    """Добавление сотрудника в компанию"""
-    first_name: str
-    second_name: str
-    last_name: str
-    phone: str
-    email: EmailStr
-    password: str
-    role: Literal["Сотрудник", "Руководитель отдела"]
-    department_id: Optional[int] = None
-
-    @validator("department_id")
-    def validate_department_id(cls, v, values):
-        if "role" in values and values["role"] == "Сотрудник" and v is None:
-            raise ValueError("Для роли 'Сотрудник' необходимо указать department_id")
-        return v

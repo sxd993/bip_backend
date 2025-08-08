@@ -12,8 +12,8 @@
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from src.auth.routes.authentication import router as auth_router
-from src.personal_account.routes.personal_account import router as personal_account_router
+from src.auth.authentication import router as auth_router
+from src.personal_account.personal_account import router as personal_account_router
 from src.transactions.routes.transactions import router as transactions_router
 from src.user.routes.user import router as user_router
 from src.deals.routes.deals import router as deals_router
