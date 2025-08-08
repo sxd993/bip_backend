@@ -7,8 +7,8 @@
 Модели:
 - LoginData: Для входа пользователя
 - RegisterPhysicalPersonData: Для регистрации физического лица
-- RegisterLegalEntityData: Для регистрации юридического лица
-- AddEmployeeData: Для добавления сотрудника в компанию
+- RegisterLegalEntityData: Для регистрации юридического лица (руководитель)
+- RegisterEmployeeData: Для регистрации сотрудника компании
 """
 
 from pydantic import BaseModel, EmailStr, validator
@@ -44,7 +44,7 @@ class RegisterPhysicalPersonData(BaseModel):
         return '+' + digits_only
 
 class RegisterLegalEntityData(BaseModel):
-    """Регистрация юридического лица"""
+    """Регистрация юридического лица (руководитель компании)"""
     company_name: str
     inn: str
     employee_first_name: str
@@ -70,3 +70,25 @@ class RegisterLegalEntityData(BaseModel):
         elif digits_only.startswith("8"):
             return "7" + digits_only[1:]
         return digits_only
+
+class RegisterEmployeeData(BaseModel):
+    """Регистрация сотрудника компании по токену"""
+    first_name: str
+    second_name: str
+    last_name: str
+    position: str 
+    phone: str
+    email: EmailStr
+    password: str
+    company_token: str  # Токен приглашения от компании
+
+    @validator("phone")
+    def validate_phone(cls, v):
+        digits_only = re.sub(r"\D", "", v)
+        return '+' + digits_only
+    
+    @validator("company_token")
+    def validate_token(cls, v):
+        if len(v) != 32:
+            raise ValueError("Некорректный токен компании")
+        return v

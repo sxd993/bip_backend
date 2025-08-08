@@ -47,10 +47,7 @@ app.include_router(deals_router, prefix="/deals", tags=["Deals"])
 @app.get("/api", tags=["Root"])
 async def root():
     return {
-        "message": "BIP API is running",
-        "version": app.version,
-        "status": "healthy",
-        "docs": "/docs",
+        "message": "BIP API is running"
     }
 
 
