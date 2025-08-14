@@ -7,6 +7,8 @@
 Функционал:
 - Получение списка сделок по идентификатору контакта (эндпоинт /get-deals)
 - Получение и расшифровка статусов сделок
+- Создание новых обращений
+- Управление текущими и историческими сделками
 
 Зависимости:
 - FastAPI
@@ -30,9 +32,14 @@ class DealFilter(BaseModel):
 
 router = APIRouter()
 
+# Подключаем маршруты создания обращений
+from .create_appeals import router as create_router
+router.include_router(create_router)
+
 
 @router.get("/get-deals")
 async def get_deals(token: str = Depends(get_token)):
+    """Получение сделок пользователя (legacy endpoint)"""
     try:
         decoded_token = decode_access_token(token)
         contact_id = decoded_token.get("contact_id")
